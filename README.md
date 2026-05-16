@@ -13,7 +13,7 @@ This project is a web application built using Flask, HTML, CSS, and JavaScript. 
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/your-username/your-repository.git
+    git clone https:
     ```
 
 2. Install dependencies:
