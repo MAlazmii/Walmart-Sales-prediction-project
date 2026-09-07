@@ -74,12 +74,12 @@ required><br>
 <label for="Type_A">Type A :</label>
 <label for="Type_B">Type B :</label>
 <label for="Type_C">Type C :</label><br>
-<input class="radio" type="radio" id="Type_A" name="Type_A"
-value="0" onclick="updateValue('Type_A')">
-<input class="radio" type="radio" id="Type_B" name="Type_B"
-value="0" onclick="updateValue('Type_B')">
-<input class="radio" type="radio" id="Type_C" name="Type_C"
-value="0" onclick="updateValue('Type_C')"><br>
+<input class="radio" type="radio" id="Type_A" name="type"
+value="A" required checked>
+<input class="radio" type="radio" id="Type_B" name="type"
+value="B" required>
+<input class="radio" type="radio" id="Type_C" name="type"
+value="C" required><br>
 
 <label for="Month">Month:</label><br>
 <input type="number" id="Month" name="Month" value="1" min="1" max="12"
@@ -144,7 +144,7 @@ value="Check Inventory">
 
 </div>
 
-<script src="script.js"></script>
+
 </body>
 
 </html>

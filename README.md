@@ -26,27 +26,35 @@ The application combines a Flask API with HTML, CSS, JavaScript, and Chart.js. I
 
 Inventory is a lookup of saved records, not a connection to live stock systems. The repository includes a model artifact but does not include its training pipeline or a reproducible accuracy evaluation.
 
-## Local setup status
+## Run locally
 
-The original dependencies pin Flask 2.0.2, Flask-Cors 3.0.10, Flask-Mail 0.9.1, joblib 1.0.1, and NumPy 1.21.2. A complete, freshly tested environment for the serialized model is not supplied, so these pins should be reviewed before attempting a local run.
-
-The source expects the API to run from the repository directory on `http://127.0.0.1:5000`; the browser interface is `index.html`. The intended backend entry point is:
+Use Python 3.11 and a virtual environment:
 
 ```sh
+python -m venv .venv
+# Activate the environment, then:
+python -m pip install -r requirements.txt
 python flask_model_server.py
 ```
 
-Before running it, establish a compatible model-loading environment. For email, set `SMTP_USERNAME` and `SMTP_PASSWORD` for your own SMTP account. Set `SMTP_SENDER` if the sender should differ from the username. Do not commit credentials. When `SMTP_PASSWORD` is absent, it does not block application initialization, but authenticated email delivery will not work. The backend currently starts in Flask debug mode and is intended for local development.
+Serve the browser files from a second terminal with `python -m http.server 8000` and open `http://127.0.0.1:8000`. The interface calls the local API at `http://127.0.0.1:5000`.
 
-## Current limitations
+The requirements cover the web/API layer. The included serialized model has no recorded training environment; its additional estimator dependencies and compatibility still need establishing before real predictions can be claimed. Loading is deferred until a prediction is requested, so inventory lookup works independently. A model-loading failure produces a controlled error rather than preventing the API from starting.
 
-- The browser's holiday conversion checks the misspelling `"flase"`, so the form's `false` option is incorrectly sent as a holiday.
-- `index.html` loads `script.js` twice, which can duplicate event handlers.
-- The inventory view draws a chart, but the email handler still reads table rows from an older interface. Inventory records therefore do not flow into email through the current UI.
-- SMTP settings require configuration; successful email delivery is not established by the presence of a form.
-- Model compatibility, prediction accuracy, and end-to-end operation need validation before deployment.
+For email, configure `SMTP_USERNAME`, `SMTP_PASSWORD`, and optionally `SMTP_SENDER` in the environment. Never commit these values. Email delivery requires working SMTP credentials. Debug mode is off unless `FLASK_DEBUG=1` is set.
 
-These limitations describe the committed prototype honestly and identify the next improvements needed for a dependable demonstration.
+## Behavior and checks
+
+The interface sends one request per submission, maps holiday selections to 0/1, allows exactly one store type, and passes the fetched inventory records into the email payload. Failed inventory lookups clear stale records. The API validates prediction features and email payloads, and resolves inventory paths relative to its own source file.
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m pytest --rootdir=. tests/test_api.py
+npm install
+npm test
+```
+
+Tests cover real form behavior using a local DOM and Flask routes. Network/model/email boundaries are substituted: tests do not deserialize the supplied model, contact SMTP, establish prediction accuracy, or demonstrate production readiness. The application remains a local prototype; its email route is not suitable for public deployment without access controls and abuse prevention.
 
 ## License
 

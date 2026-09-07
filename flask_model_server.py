@@ -26,7 +26,7 @@ current_directory = os.path.dirname(os.path.realpath(__file__))
 
 # Load the pre-trained model
 model_path = os.path.join(current_directory, 'trained_model2.pkl')
-model = joblib.load(model_path)
+model = None  # Loaded only when prediction is requested.
 
 
 @app.route('/send-email', methods=['POST'])
@@ -38,14 +38,21 @@ def send_email():
         response.headers.add('Access-Control-Allow-Methods', 'POST')
         return response
     
-    data = request.json
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "A JSON object is required"}), 400
 
     email = data.get('email')
     prediction_data = data.get('predictionData')
     inventory_data = data.get('inventoryData')
 
-    if not email:
-        return jsonify({'error': 'Email address is required'}), 400
+    keys = {'store', 'dept', 'date', 'isHoliday', 'inventory'}
+    if not isinstance(email, str) or '@' not in email or '\n' in email or '\r' in email:
+        return jsonify({'error': 'A valid email address is required'}), 400
+    if not isinstance(inventory_data, list) or any(
+        not isinstance(item, dict) or not keys.issubset(item) for item in inventory_data
+    ):
+        return jsonify({'error': 'Inventory records are required as a list'}), 400
 
     # Construct email message
     msg = Message('Predictions and Inventory Data', recipients=[email])
@@ -72,7 +79,7 @@ Your Position/Company Name'''
         mail.send(msg)
         return jsonify({'message': 'Email sent successfully'}), 200
     except Exception as e:
-        return jsonify({'error': f'Failed to send email: {str(e)}'}), 500
+        return jsonify({'error': 'Email delivery failed; check SMTP configuration'}), 503
 
 def format_inventory_data(inventory_data):
     formatted_data = ''
@@ -84,7 +91,6 @@ def format_inventory_data(inventory_data):
 @app.route('/predict', methods=['POST', 'OPTIONS'])
 
 def predict():
-    print(request)
     if request.method == 'OPTIONS':
         response = jsonify({'message': 'Preflight Request Handled'})
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -93,35 +99,39 @@ def predict():
         return response
 
 
-    # Get input values from the request
-    input_data = request.json
-    print(input_data)
-    
-    # Process input data and convert to array for prediction
-    input_values = [
-        input_data['Store'],
-        input_data['Dept'],
-        input_data['Temperature'],
-        input_data['MarkDown1'],
-        input_data['MarkDown2'],
-        input_data['MarkDown4'],
-        input_data['MarkDown5'],
-        input_data['Size'],
-        input_data['Type_A'],
-        input_data['Type_B'],
-        input_data['Type_C'],
-        input_data['Month'],
-        input_data['Day'],
-        input_data['isHoliday']
-    ]
+    input_data = request.get_json(silent=True)
+    fields = ['Store', 'Dept', 'Temperature', 'MarkDown1', 'MarkDown2',
+              'MarkDown4', 'MarkDown5', 'Size', 'Type_A', 'Type_B', 'Type_C',
+              'Month', 'Day', 'isHoliday']
+    try:
+        if not isinstance(input_data, dict):
+            raise ValueError('A JSON object is required')
+        values = {key: float(input_data[key]) for key in fields}
+        if not all(math.isfinite(value) for value in values.values()):
+            raise ValueError('Features must be finite numbers')
+        for key, low, high in [('Store', 1, 45), ('Dept', 1, 99),
+                               ('Month', 1, 12), ('Day', 1, 31)]:
+            if not values[key].is_integer() or not low <= values[key] <= high:
+                raise ValueError('Invalid ' + key)
+        flags = [values[key] for key in ['Type_A', 'Type_B', 'Type_C']]
+        if any(value not in (0, 1) for value in flags) or sum(flags) != 1:
+            raise ValueError('Choose exactly one store type')
+        if values['isHoliday'] not in (0, 1) or values['Size'] <= 0:
+            raise ValueError('Invalid holiday flag or store size')
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return jsonify({'error': 'Provide all valid numeric features and exactly one store type'}), 400
 
-    input_array = np.array([input_values])
-    
-    # Make prediction using the loaded model
-    prediction = model.predict(input_array)
-    prediction =  math.floor(prediction)
-    
-    
+    global model
+    try:
+        if model is None:
+            model = joblib.load(model_path)
+        prediction_values = np.asarray(model.predict(np.array([[values[key] for key in fields]]))).reshape(-1)
+        if prediction_values.size != 1 or not np.isfinite(prediction_values[0]):
+            raise ValueError('Model returned an invalid prediction')
+        prediction = math.floor(float(prediction_values[0]))
+    except Exception:
+        return jsonify({'error': 'Prediction unavailable; check the model environment'}), 503
+
     # Return prediction as JSON response
     response = jsonify({'prediction': int(prediction)})
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -142,7 +152,6 @@ def load_csv(filename):
 
 
 def get_data():
-    print(request)
 
     if request.method == 'OPTIONS':
         response = jsonify({'message': 'Preflight Request Handled'})
@@ -156,12 +165,12 @@ def get_data():
 
     # Check if store_number and dept_number are provided
     if not store_number or not dept_number:
-        return jsonify({'error': 'Store number and department number are required parameters'})
+        return jsonify({'error': 'Store number and department number are required parameters'}), 400
 
     # Load CSV file
-    csv_filename = 'test_with_last_known_inventory.csv'  # Change this to your CSV filename
+    csv_filename = os.path.join(current_directory, 'test_with_last_known_inventory.csv')  # Change this to your CSV filename
     if not os.path.isfile(csv_filename):
-        return jsonify({'error': 'CSV file not found'})
+        return jsonify({'error': 'CSV file not found'}), 503
 
     # Load CSV data
     data = load_csv(csv_filename)
@@ -173,9 +182,8 @@ def get_data():
             results.append(row)
 
     # Return results in JSON format
-            print(jsonify(results))
     return jsonify(results)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
 

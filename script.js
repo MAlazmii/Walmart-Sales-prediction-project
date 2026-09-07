@@ -1,18 +1,5 @@
-function updateValue(type) {
-    var elements = document.getElementsByName("type");
-    elements.forEach(function(element) {
-        if (element.id === type) {
-            element.value = "1";
-        } else {
-            element.value = "0";
-        }
-    });
-}
-
-// document.getElementById("inventory_form").addEventListener("submit", function(event) {
-//     event.preventDefault();
-//     getData();
-// });
+let latestInventory = [];
+let inventoryChart = null;
 
 document.getElementById("predictionForm").addEventListener("submit", function(event) {
     event.preventDefault();
@@ -43,75 +30,27 @@ async function sendData() {
     jsonObject.Type_C = document.getElementById('Type_C').checked ? 1 : 0;
     jsonObject.Month = parseInt(jsonObject.Month);
     jsonObject.Day = parseInt(jsonObject.Day);
-    jsonObject.isHoliday = jsonObject.isHoliday === "flase" ? 0 : 1;
+    jsonObject.isHoliday = jsonObject.isHoliday === "true" ? 1 : 0;
 
-    // Print the data being sent to the server
-    console.log("Data sent to server:", JSON.stringify(jsonObject));
+    delete jsonObject.type;
 
-    // Send JSON data to the server
-    const response = await fetch('http://127.0.0.1:5000/predict', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json' // Specify content type as JSON
-        },
-        body: JSON.stringify(jsonObject), // Convert JSON object to string
-        mode: 'cors'
-    });
-
-    const data = await response.json();
-    document.getElementById("predictionResult").innerText = `${data.prediction} $`;
+    try {
+        const response = await fetch('http://127.0.0.1:5000/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(jsonObject)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Prediction unavailable');
+        document.getElementById("predictionResult").textContent = `${data.prediction} $`;
+    } catch (error) {
+        document.getElementById("predictionResult").textContent = 'Prediction unavailable. Check the inputs and local server.';
+    }
 }
 
-// async function getData() {
-//     var storeNumber = document.getElementById("storeSelect").value;
-//     var deptNumber = document.getElementById("deptSelect").value;
-
-//     try {
-//         const response = await fetch(`http://127.0.0.1:5000/get_data?store_number=${storeNumber}&dept_number=${deptNumber}`, {
-//             method: 'GET',
-//             mode: 'cors'
-//         });
-
-//         if (!response.ok) {
-//             throw new Error('Network response was not ok');
-//         }
-
-//         const data = await response.json();
-
-//         var output = document.querySelector('.responsive-table'); // Select the table container
-
-//         // Clear previous content
-//         output.innerHTML = `
-//             <li class="table-header">
-//                 <div class="col col-1">Store</div>
-//                 <div class="col col-2">Department</div>
-//                 <div class="col col-3">Date</div>
-//                 <div class="col col-4">Is Holiday</div>
-//                 <div class="col col-5">Inventory</div>
-//             </li>`;
-
-//         // Loop through the data array and generate HTML for each row
-//         data.forEach(function(row) {
-//             var rowElement = document.createElement("li");
-//             rowElement.classList.add("table-row");
-//             rowElement.innerHTML = `
-//                 <div class="col col-1" data-label="Store">${row.Store}</div>
-//                 <div class="col col-2" data-label="Department">${row.Dept}</div>
-//                 <div class="col col-3" data-label="Date">${row.Date}</div>
-//                 <div class="col col-4" data-label="Is Holiday">${row.IsHoliday}</div>
-//                 <div class="col col-5" data-label="Inventory">${row.Last_Known_Inventory}</div>`;
-//             output.appendChild(rowElement);
-//         });
-//     } catch (error) {
-//         console.error('Error fetching data:', error);
-//     }
-// }
-
-
-// new plot .code
-
-
 async function getDataAndPlotGraph() {
+    latestInventory = [];
+    if (inventoryChart) { inventoryChart.destroy(); inventoryChart = null; }
     var storeNumber = document.getElementById("storeSelect").value;
     var deptNumber = document.getElementById("deptSelect").value;
 
@@ -127,6 +66,9 @@ async function getDataAndPlotGraph() {
 
         const data = await response.json();
 
+        if (!Array.isArray(data)) throw new Error(data.error || "Invalid inventory response");
+        latestInventory = data;
+
         // Extract dates and inventory levels from data
         const dates = data.map(row => row.Date);
         const inventory = data.map(row => row.Last_Known_Inventory);
@@ -134,12 +76,13 @@ async function getDataAndPlotGraph() {
         // Call function to plot graph
         plotGraph(dates, inventory);
     } catch (error) {
-        console.error('Error fetching data:', error);
+        alert("Inventory unavailable. Check the local server and try again.");
     }
 }
 
 function plotGraph(xValues, yValues) {
-    new Chart("myChart", {
+    if (!yValues.length) return;
+    inventoryChart = new Chart("myChart", {
         type: "line",
         data: {
             labels: xValues,
@@ -178,26 +121,13 @@ document.getElementById("email-form").addEventListener("submit", function(event)
     const email = document.getElementById("email").value;
 
     // Get prediction data
-    const predictionData = document.getElementById("predictionResult").innerText;
+    const predictionData = document.getElementById("predictionResult").textContent;
 
-    // Get inventory data
-    const inventoryRows = document.querySelectorAll(".table-row");
-    const inventoryData = [];
-    inventoryRows.forEach(row => {
-        const store = row.querySelector("[data-label='Store']").innerText;
-        const dept = row.querySelector("[data-label='Department']").innerText;
-        const date = row.querySelector("[data-label='Date']").innerText;
-        const isHoliday = row.querySelector("[data-label='Is Holiday']").innerText;
-        const inventory = row.querySelector("[data-label='Inventory']").innerText;
-
-        inventoryData.push({
-            store,
-            dept,
-            date,
-            isHoliday,
-            inventory
-        });
-    });
+    // Use the same records as the chart, rather than a removed table.
+    const inventoryData = latestInventory.map(row => ({
+        store: row.Store, dept: row.Dept, date: row.Date,
+        isHoliday: row.IsHoliday, inventory: row.Last_Known_Inventory
+    }));
 
     // Prepare data to send to Flask API
     const data = {
@@ -214,7 +144,11 @@ document.getElementById("email-form").addEventListener("submit", function(event)
         },
         body: JSON.stringify(data)
     })
-    .then(response => response.json())
+    .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Email delivery failed");
+        return data;
+    })
     .then(data => {
         alert(data.message); // Show success message
     })
