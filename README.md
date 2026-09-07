@@ -1,72 +1,53 @@
-# Walmart Sales Prediction Web Application
+# Walmart Sales Prediction
 
-This project is a web application built using Flask, HTML, CSS, and JavaScript. It provides a user interface for predicting weekly sales and checking inventory levels based on user input.
+**A local web prototype connecting a sales-prediction model, inventory data, and an interactive browser interface.**
 
-## Features
+The application combines a Flask API with HTML, CSS, JavaScript, and Chart.js. It accepts store and department features, calls a saved model to estimate weekly sales, and plots inventory records from the included CSV.
 
-- **Sales Prediction**: Users can input various parameters such as store number, department number, temperature, markdowns, size, type, month, day, and holiday status to predict weekly sales.
-- **Inventory Check**: Users can select a store and department to check inventory levels.
-- **Email Notification**: Users can input their email address to receive predictions and inventory data via email.
+## What's included
 
-## Installation
+| File | Purpose |
+| --- | --- |
+| [`flask_model_server.py`](flask_model_server.py) | Prediction, inventory lookup, and email API handlers |
+| [`index.html`](index.html) | Prediction, inventory, and email forms |
+| [`script.js`](script.js) | Form handling, API requests, and inventory chart |
+| [`style.css`](style.css) | Browser interface styling |
+| [`requirements.txt`](requirements.txt) | Original Python dependency pins |
+| `trained_model2.pkl` | Serialized prediction model loaded with joblib |
+| `test_with_last_known_inventory.csv` | Inventory records queried by store and department |
 
-1. Clone the repository:
+## Request flow
 
-    ```bash
-    git clone https:
-    ```
+| Route | Input | Output |
+| --- | --- | --- |
+| `POST /predict` | Store, department, temperature, markdowns, size, store type, month, day, and holiday flag | Predicted weekly sales |
+| `GET /get_data` | `store_number` and `dept_number` | Matching rows from the local CSV |
+| `POST /send-email` | Recipient and client-supplied prediction/inventory data | Email delivery attempt through Flask-Mail |
 
-2. Install dependencies:
+Inventory is a lookup of saved records, not a connection to live stock systems. The repository includes a model artifact but does not include its training pipeline or a reproducible accuracy evaluation.
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+## Local setup status
 
-3. Run the Flask server:
+The original dependencies pin Flask 2.0.2, Flask-Cors 3.0.10, Flask-Mail 0.9.1, joblib 1.0.1, and NumPy 1.21.2. A complete, freshly tested environment for the serialized model is not supplied, so these pins should be reviewed before attempting a local run.
 
-    ```bash
-    python flask_model_server.py
-    ```
+The source expects the API to run from the repository directory on `http://127.0.0.1:5000`; the browser interface is `index.html`. The intended backend entry point is:
 
-4. Open `index.html` in your web browser.
+```sh
+python flask_model_server.py
+```
 
-## Usage
+Before running it, establish a compatible model-loading environment. For email, set `SMTP_USERNAME` and `SMTP_PASSWORD` for your own SMTP account. Set `SMTP_SENDER` if the sender should differ from the username. Do not commit credentials. When `SMTP_PASSWORD` is absent, it does not block application initialization, but authenticated email delivery will not work. The backend currently starts in Flask debug mode and is intended for local development.
 
-### Sales Prediction
+## Current limitations
 
-1. Fill in the required fields in the prediction form.
-2. Click the "Predict" button.
-3. View the predicted weekly sales in the "Predictions" section.
+- The browser's holiday conversion checks the misspelling `"flase"`, so the form's `false` option is incorrectly sent as a holiday.
+- `index.html` loads `script.js` twice, which can duplicate event handlers.
+- The inventory view draws a chart, but the email handler still reads table rows from an older interface. Inventory records therefore do not flow into email through the current UI.
+- SMTP settings require configuration; successful email delivery is not established by the presence of a form.
+- Model compatibility, prediction accuracy, and end-to-end operation need validation before deployment.
 
-### Inventory Check
-
-1. Select a store from the dropdown menu.
-2. Select a department from the dropdown menu.
-3. Click the "Check Inventory" button.
-4. View inventory data in the "Inventory Levels" section.
-
-### Email Notification
-
-1. Enter your email address in the email form.
-2. Perform a sales prediction or inventory check.
-3. Click the "Send Email" button to receive predictions and inventory data via email.
-
-## File Structure
-
-- **flask_model_server.py**: Flask application for handling API requests and predictions.
-- **index.html**: HTML file containing the user interface elements.
-- **scripts.js**: JavaScript file containing client-side functionality.
-- **styles.css**: CSS file for styling the web application.
-
-## Contributing
-
-Contributions are welcome! If you have any suggestions or find any issues, please open an issue or a pull request on GitHub.
+These limitations describe the committed prototype honestly and identify the next improvements needed for a dependable demonstration.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- This project was inspired by the need for a simple web interface for predicting sales and checking inventory.
-
+See [`LICENSE`](LICENSE) for the MIT license.
