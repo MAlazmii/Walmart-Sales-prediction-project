@@ -1,5 +1,7 @@
 let latestInventory = [];
 let inventoryChart = null;
+let predictionRequest = 0;
+let inventoryRequest = 0;
 
 document.getElementById("predictionForm").addEventListener("submit", function(event) {
     event.preventDefault();
@@ -7,6 +9,8 @@ document.getElementById("predictionForm").addEventListener("submit", function(ev
 });
 
 async function sendData() {
+    const requestId = ++predictionRequest;
+    document.getElementById("predictionResult").textContent = '';
     const form = document.getElementById("predictionForm");
     const formData = new FormData(form);
 
@@ -35,27 +39,30 @@ async function sendData() {
     delete jsonObject.type;
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/predict', {
+        const response = await fetch('/predict', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(jsonObject)
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Prediction unavailable');
+        if (requestId !== predictionRequest) return;
         document.getElementById("predictionResult").textContent = `${data.prediction} $`;
     } catch (error) {
+        if (requestId !== predictionRequest) return;
         document.getElementById("predictionResult").textContent = 'Prediction unavailable. Check the inputs and local server.';
     }
 }
 
 async function getDataAndPlotGraph() {
+    const requestId = ++inventoryRequest;
     latestInventory = [];
     if (inventoryChart) { inventoryChart.destroy(); inventoryChart = null; }
     var storeNumber = document.getElementById("storeSelect").value;
     var deptNumber = document.getElementById("deptSelect").value;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/get_data?store_number=${storeNumber}&dept_number=${deptNumber}`, {
+        const response = await fetch(`/get_data?store_number=${storeNumber}&dept_number=${deptNumber}`, {
             method: 'GET',
             mode: 'cors'
         });
@@ -67,15 +74,22 @@ async function getDataAndPlotGraph() {
         const data = await response.json();
 
         if (!Array.isArray(data)) throw new Error(data.error || "Invalid inventory response");
-        latestInventory = data;
+        const normalizedData = data.map(row => {
+            const inventory = Number(row.Last_Known_Inventory);
+            if (!Number.isFinite(inventory)) throw new Error("Invalid inventory value");
+            return {...row, Last_Known_Inventory: inventory};
+        });
+        if (requestId !== inventoryRequest) return;
+        latestInventory = normalizedData;
 
         // Extract dates and inventory levels from data
-        const dates = data.map(row => row.Date);
-        const inventory = data.map(row => row.Last_Known_Inventory);
+        const dates = normalizedData.map(row => row.Date);
+        const inventory = normalizedData.map(row => row.Last_Known_Inventory);
 
         // Call function to plot graph
         plotGraph(dates, inventory);
     } catch (error) {
+        if (requestId !== inventoryRequest) return;
         alert("Inventory unavailable. Check the local server and try again.");
     }
 }
@@ -137,7 +151,7 @@ document.getElementById("email-form").addEventListener("submit", function(event)
     };
 
     // Send data to Flask API
-    fetch('http://127.0.0.1:5000/send-email', {
+    fetch('/send-email', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

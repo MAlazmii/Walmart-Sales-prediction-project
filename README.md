@@ -12,7 +12,7 @@ The application combines a Flask API with HTML, CSS, JavaScript, and Chart.js. I
 | [`index.html`](index.html) | Prediction, inventory, and email forms |
 | [`script.js`](script.js) | Form handling, API requests, and inventory chart |
 | [`style.css`](style.css) | Browser interface styling |
-| [`requirements.txt`](requirements.txt) | Original Python dependency pins |
+| [`requirements.txt`](requirements.txt) | Web/API dependencies |
 | `trained_model2.pkl` | Serialized prediction model loaded with joblib |
 | `test_with_last_known_inventory.csv` | Inventory records queried by store and department |
 
@@ -37,7 +37,7 @@ python -m pip install -r requirements.txt
 python flask_model_server.py
 ```
 
-Serve the browser files from a second terminal with `python -m http.server 8000` and open `http://127.0.0.1:8000`. The interface calls the local API at `http://127.0.0.1:5000`.
+Open `http://127.0.0.1:5000`. Flask serves the interface and its local API from that one address.
 
 The requirements cover the web/API layer. The included serialized model has no recorded training environment; its additional estimator dependencies and compatibility still need establishing before real predictions can be claimed. Loading is deferred until a prediction is requested, so inventory lookup works independently. A model-loading failure produces a controlled error rather than preventing the API from starting.
 
@@ -50,7 +50,7 @@ The interface sends one request per submission, maps holiday selections to 0/1, 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m pytest --rootdir=. tests/test_api.py
-npm install
+npm ci
 npm test
 ```
 

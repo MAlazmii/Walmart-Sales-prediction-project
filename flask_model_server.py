@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_mail import Mail, Message
 import joblib
@@ -26,7 +26,23 @@ current_directory = os.path.dirname(os.path.realpath(__file__))
 
 # Load the pre-trained model
 model_path = os.path.join(current_directory, 'trained_model2.pkl')
+inventory_csv_path = os.path.join(current_directory, 'test_with_last_known_inventory.csv')
 model = None  # Loaded only when prediction is requested.
+
+
+@app.route('/')
+def index():
+    return send_from_directory(current_directory, 'index.html')
+
+
+@app.route('/script.js')
+def script():
+    return send_from_directory(current_directory, 'script.js')
+
+
+@app.route('/style.css')
+def style():
+    return send_from_directory(current_directory, 'style.css')
 
 
 @app.route('/send-email', methods=['POST'])
@@ -72,8 +88,7 @@ We hope this information is helpful to you. If you have any further questions or
 Thank you once again for choosing our platform.
 
 Best regards,
-Your Name
-Your Position/Company Name'''
+Walmart Sales Prediction local prototype'''
 
     try:
         mail.send(msg)
@@ -141,9 +156,14 @@ def predict():
 
 def load_csv(filename):
     data = []
-    with open(filename, 'r') as file:
-        csv_reader = csv.DictReader(file)
+    required_fields = {'Store', 'Dept', 'Date', 'IsHoliday', 'Last_Known_Inventory'}
+    with open(filename, 'r', encoding='utf-8', newline='') as file:
+        csv_reader = csv.DictReader(file, strict=True)
+        if not required_fields.issubset(csv_reader.fieldnames or []):
+            raise ValueError('Missing required inventory columns')
         for row in csv_reader:
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError('Malformed inventory row')
             data.append(row)
     return data    
 
@@ -163,27 +183,35 @@ def get_data():
     store_number = request.args.get('store_number')
     dept_number = request.args.get('dept_number')
 
-    # Check if store_number and dept_number are provided
-    if not store_number or not dept_number:
-        return jsonify({'error': 'Store number and department number are required parameters'}), 400
+    try:
+        store = int(store_number)
+        dept = int(dept_number)
+        if str(store) != store_number or str(dept) != dept_number:
+            raise ValueError
+        if not 1 <= store <= 45 or not 1 <= dept <= 99:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Store must be 1-45 and department must be 1-99'}), 400
 
-    # Load CSV file
-    csv_filename = os.path.join(current_directory, 'test_with_last_known_inventory.csv')  # Change this to your CSV filename
-    if not os.path.isfile(csv_filename):
-        return jsonify({'error': 'CSV file not found'}), 503
-
-    # Load CSV data
-    data = load_csv(csv_filename)
+    try:
+        data = load_csv(inventory_csv_path)
+    except (OSError, csv.Error, TypeError, ValueError):
+        return jsonify({'error': 'Inventory data unavailable'}), 503
 
     # Search for data matching store_number and dept_number
     results = []
-    for row in data:
-        if row['Store'] == store_number and row['Dept'] == dept_number:
-            results.append(row)
+    try:
+        for row in data:
+            if row['Store'] == str(store) and row['Dept'] == str(dept):
+                inventory = float(row['Last_Known_Inventory'])
+                if not math.isfinite(inventory):
+                    raise ValueError
+                results.append({**row, 'Last_Known_Inventory': inventory})
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'error': 'Inventory data unavailable'}), 503
 
     # Return results in JSON format
     return jsonify(results)
 
 if __name__ == '__main__':
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
-
